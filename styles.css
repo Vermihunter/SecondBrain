@@ -11,3 +11,46 @@ If your plugin does not need CSS, delete this file.
 	text-align: center;
 	margin-bottom: 1em;
 }
+
+.question-qa {
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+	margin-bottom: 0;
+}
+
+/* Labels */
+.question-qa .qa-label {
+	font-size: 0.9em;
+	opacity: 0.85;
+	margin-top: 0.6rem;
+}
+
+.question-qa .qa-label-answer {
+	margin-bottom: 0.6rem;
+}
+
+/* Textareas */
+.question-qa .qa-textarea {
+	width: 100%;
+	min-width: 100%;
+	resize: vertical;
+	padding: 0.6rem;
+	border-radius: 6px;
+}
+
+/* Divider under Answer */
+.question-qa .qa-divider {
+	margin-top: 1.4rem;
+	margin-bottom: 2rem;
+	opacity: 0.5;
+}
+
+.question-modal-footer {
+	display: flex;
+	justify-content: center;
+	gap: 0.6rem;
+	margin-top: 2rem;
+	padding-top: 1rem;
+	border-top: 1px solid var(--background-modifier-border);
+}

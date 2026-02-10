@@ -1,164 +1,14 @@
-// import {
-// 	App,
-// 	Modal,
-// 	Setting,
-// 	TextComponent,
-// 	DropdownComponent,
-// 	ToggleComponent,
-// 	ButtonComponent,
-// 	Notice,
-// } from "obsidian";
-
-// type Mode = "auto" | "manual";
-
-// interface CreateQuestionModalResult {
-// 	retries: number;
-// 	mode: Mode;
-// 	verbose: boolean;
-// }
-
-// export class CreateQuestionModal extends Modal {
-// 	private retries: number | null = null;
-// 	private mode: Mode = "auto";
-// 	private verbose = false;
-
-// 	private saveButton!: ButtonComponent;
-// 	private errorEl!: HTMLElement;
-
-// 	constructor(
-// 		app: App,
-// 		private readonly onSubmit: (result: CreateQuestionModalResult) => void,
-// 	) {
-// 		super(app);
-// 	}
-
-// 	onOpen() {
-// 		const { contentEl } = this;
-// 		contentEl.empty();
-
-// 		contentEl.createEl("h2", {
-// 			text: "Create Question",
-// 			cls: "centered-modal-title",
-// 		});
-
-// 		/* ---------- Retries (integer input) ---------- */
-// 		new Setting(contentEl)
-// 			.setName("Retries")
-// 			.setDesc("Integer between 1 and 10")
-// 			.addText((text) => {
-// 				text.setPlaceholder("1–10");
-
-// 				text.onChange((value) => {
-// 					// Remove everything except digits
-// 					const sanitized = value.replace(/[^\d]/g, "");
-
-// 					// If we changed it, write it back immediately
-// 					if (value !== sanitized) {
-// 						text.setValue(sanitized);
-// 						return;
-// 					}
-
-// 					const n = Number(sanitized);
-// 					this.retries = Number.isInteger(n) ? n : null;
-// 					this.validate();
-// 				});
-// 			});
-
-// 		/* ---------- Mode (enum dropdown) ---------- */
-// 		new Setting(contentEl)
-// 			.setName("Mode")
-// 			.setDesc("Execution mode")
-// 			.addDropdown((dropdown: DropdownComponent) => {
-// 				dropdown
-// 					.addOptions({
-// 						auto: "Automatic",
-// 						manual: "Manual",
-// 					})
-// 					.setValue(this.mode)
-// 					.onChange((value: Mode) => {
-// 						this.mode = value;
-// 						this.validate();
-// 					});
-// 			});
-
-// 		/* ---------- Verbose toggle ---------- */
-// 		new Setting(contentEl)
-// 			.setName("Verbose logging")
-// 			.setDesc("Show extra debug information")
-// 			.addToggle((toggle: ToggleComponent) => {
-// 				toggle.setValue(this.verbose).onChange((value) => {
-// 					this.verbose = value;
-// 					this.validate();
-// 				});
-// 			});
-
-// 		/* ---------- Validation error area ---------- */
-// 		this.errorEl = contentEl.createEl("div", {
-// 			cls: "example-modal-error",
-// 		});
-
-// 		/* ---------- Footer buttons ---------- */
-// 		const footer = contentEl.createDiv({ cls: "modal-button-container" });
-
-// 		new ButtonComponent(footer)
-// 			.setButtonText("Cancel")
-// 			.onClick(() => this.close());
-
-// 		this.saveButton = new ButtonComponent(footer)
-// 			.setButtonText("Save")
-// 			.setCta()
-// 			.setDisabled(true)
-// 			.onClick(() => this.submit());
-// 	}
-
-// 	private validate() {
-// 		if (this.retries === null) {
-// 			this.setError("Retries must be an integer");
-// 			return;
-// 		}
-
-// 		if (this.retries < 1 || this.retries > 10) {
-// 			this.setError("Retries must be between 1 and 10");
-// 			return;
-// 		}
-
-// 		this.clearError();
-// 	}
-
-// 	private setError(message: string) {
-// 		this.errorEl.setText(message);
-// 		this.saveButton.setDisabled(true);
-// 	}
-
-// 	private clearError() {
-// 		this.errorEl.empty();
-// 		this.saveButton.setDisabled(false);
-// 	}
-
-// 	private submit() {
-// 		if (this.retries === null) return;
-
-// 		this.onSubmit({
-// 			retries: this.retries,
-// 			mode: this.mode,
-// 			verbose: this.verbose,
-// 		});
-
-// 		new Notice("Settings saved");
-// 		this.close();
-// 	}
-
-// 	onClose() {
-// 		this.contentEl.empty();
-// 	}
-// }
-
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal, Notice, Setting } from "obsidian";
 import { QuestionTemplate } from "../../core/types/QuestionAttributeTemplate";
 import SecondBrainPlugin from "../../main";
 
 export class CreateQuestionModal extends Modal {
 	private selectedTemplate?: QuestionTemplate;
+	private attrsContainer!: HTMLElement;
+	private footerContainer!: HTMLElement;
+
+	private questionText = "";
+	private answerText = "";
 
 	constructor(
 		app: App,
@@ -174,10 +24,99 @@ export class CreateQuestionModal extends Modal {
 		contentEl.createEl("h2", { text: "Create Question" });
 
 		const templates = this.renderTemplatePicker(contentEl);
+
+		this.renderQAFields(contentEl);
+		this.attrsContainer = contentEl.createDiv({
+			cls: "template-attrs-container",
+		});
+
 		if (templates.length > 0) {
 			this.selectedTemplate = templates[0];
 			this.renderAttributes(contentEl);
 		}
+
+		this.footerContainer = contentEl.createDiv();
+		this.renderFooter(this.footerContainer);
+	}
+
+	private renderFooter(container: HTMLElement) {
+		const footer = container.createDiv({ cls: "question-modal-footer" });
+
+		const cancelBtn = footer.createEl("button", {
+			text: "Cancel",
+			cls: "mod-secondary",
+		});
+
+		cancelBtn.onclick = () => this.close();
+
+		const submitBtn = footer.createEl("button", {
+			text: "Create",
+			cls: "mod-cta",
+		});
+
+		submitBtn.onclick = () => this.handleSubmit();
+	}
+
+	private handleSubmit() {
+		if (!this.questionText.trim()) {
+			new Notice("Question cannot be empty");
+			return;
+		}
+
+		// Later:
+		// - build markdown
+		// - create file
+		// - insert into vault
+
+		console.log({
+			question: this.questionText,
+			answer: this.answerText,
+			template: this.selectedTemplate,
+		});
+
+		this.close();
+	}
+
+	private renderQAFields(container: HTMLElement) {
+		const qaEl = container.createDiv({ cls: "question-qa" });
+
+		// Question
+		qaEl.createEl("label", {
+			text: "Question",
+			cls: "qa-label",
+		});
+
+		const questionArea = qaEl.createEl("textarea", {
+			cls: "qa-textarea",
+			attr: {
+				placeholder: "Enter the question…",
+				rows: "3",
+			},
+		});
+
+		questionArea.addEventListener("input", () => {
+			this.questionText = questionArea.value;
+		});
+
+		// Answer
+		qaEl.createEl("label", {
+			text: "Answer",
+			cls: "qa-label qa-label-answer",
+		});
+
+		const answerArea = qaEl.createEl("textarea", {
+			cls: "qa-textarea",
+			attr: {
+				placeholder: "Enter the answer…",
+				rows: "4",
+			},
+		});
+
+		qaEl.createEl("hr", { cls: "qa-divider" });
+
+		answerArea.addEventListener("input", () => {
+			this.answerText = answerArea.value;
+		});
 	}
 
 	private renderTemplatePicker(container: HTMLElement): QuestionTemplate[] {
@@ -199,11 +138,15 @@ export class CreateQuestionModal extends Modal {
 	}
 
 	private renderAttributes(container: HTMLElement) {
-		container.querySelector(".template-attrs")?.remove();
+		//container.querySelector(".template-attrs")?.remove();
+		this.attrsContainer.empty();
 
 		if (!this.selectedTemplate) return;
 
-		const attrsEl = container.createDiv({ cls: "template-attrs" });
+		//const attrsEl = container.createDiv({ cls: "template-attrs" });
+		const attrsEl = this.attrsContainer.createDiv({
+			cls: "template-attrs",
+		});
 
 		for (const attr of this.selectedTemplate.attributes) {
 			const setting = new Setting(attrsEl).setName(attr.key);
