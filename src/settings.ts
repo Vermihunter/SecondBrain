@@ -1,12 +1,15 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import SecondBrainPlugin from "./main";
+import { FolderSuggest } from "core/utils/suggesters/FolderSuggester";
 
 export interface SecondBrainPluginSettings {
 	mySetting: string;
+	questionTemplateFolder: string;
 }
 
 export const DEFAULT_SETTINGS: SecondBrainPluginSettings = {
 	mySetting: "default",
+	questionTemplateFolder: "/",
 };
 
 export class SecondBrainSettingTab extends PluginSettingTab {
@@ -19,20 +22,32 @@ export class SecondBrainSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
-
 		containerEl.empty();
 
-		new Setting(containerEl)
-			.setName("Settings #1")
-			.setDesc("It's a secretttttttt")
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter your secret")
-					.setValue(this.plugin.settings.mySetting)
-					.onChange(async (value) => {
-						this.plugin.settings.mySetting = value;
+		containerEl.createEl("h2", { text: "Question Templates" });
+
+		new Setting(this.containerEl)
+			.setName("Question Template folder location")
+			.setDesc("Folder containing question attribute templates")
+			.addSearch((cb) => {
+				new FolderSuggest(this.app, cb.inputEl);
+				cb.setPlaceholder("Example: folder1/folder2")
+					.setValue(this.plugin.settings.questionTemplateFolder)
+					.onChange(async (new_folder) => {
+						// Trim folder and Strip ending slash if there
+						new_folder = new_folder.trim();
+						new_folder = new_folder.replace(/\/$/, "");
+
+						this.plugin.settings.questionTemplateFolder =
+							new_folder;
 						await this.plugin.saveSettings();
-					}),
-			);
+						await this.plugin.templateService.reload();
+
+						//	this.plugin.settings.templates_folder = new_folder;
+						//
+					});
+				// @ts-ignore
+				cb.containerEl.addClass("templater_search");
+			});
 	}
 }
