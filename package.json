@@ -25,6 +25,8 @@
 	},
 	"dependencies": {
 		"@popperjs/core": "^2.11.8",
-		"obsidian": "latest"
+		"handlebars": "^4.7.8",
+		"obsidian": "latest",
+		"seedrandom": "^3.0.5"
 	}
 }

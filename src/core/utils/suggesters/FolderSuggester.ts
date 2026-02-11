@@ -4,7 +4,12 @@ import { App, TAbstractFile, TFolder } from "obsidian";
 import { TextInputSuggest } from "./suggest";
 
 export class FolderSuggest extends TextInputSuggest<TFolder> {
-	constructor(app: App, inputEl: HTMLInputElement | HTMLTextAreaElement) {
+	// Added rootPath to the constructor
+	constructor(
+		app: App,
+		inputEl: HTMLInputElement | HTMLTextAreaElement,
+		private rootPath: string = "/",
+	) {
 		super(app, inputEl);
 	}
 
@@ -13,12 +18,24 @@ export class FolderSuggest extends TextInputSuggest<TFolder> {
 		const folders: TFolder[] = [];
 		const lowerCaseInputStr = inputStr.toLowerCase();
 
-		abstractFiles.forEach((folder: TAbstractFile) => {
-			if (
-				folder instanceof TFolder &&
-				folder.path.toLowerCase().contains(lowerCaseInputStr)
-			) {
-				folders.push(folder);
+		// Ensure rootPath ends with a slash for clean matching, unless it's the root
+		const normalizedRoot =
+			this.rootPath.endsWith("/") || this.rootPath === ""
+				? this.rootPath
+				: this.rootPath + "/";
+
+		abstractFiles.forEach((file: TAbstractFile) => {
+			if (file instanceof TFolder) {
+				const isInsideRoot =
+					file.path.startsWith(normalizedRoot) ||
+					normalizedRoot === "/";
+				const matchesInput = file.path
+					.toLowerCase()
+					.contains(lowerCaseInputStr);
+
+				if (isInsideRoot && matchesInput) {
+					folders.push(file);
+				}
 			}
 		});
 
@@ -26,7 +43,23 @@ export class FolderSuggest extends TextInputSuggest<TFolder> {
 	}
 
 	renderSuggestion(file: TFolder, el: HTMLElement): void {
-		el.setText(file.path);
+		let displayPath = file.path;
+
+		// If we are restricted to a rootPath, let's make the UI cleaner
+		if (this.rootPath && this.rootPath !== "/") {
+			// Remove the rootPath prefix from the display
+			if (displayPath.startsWith(this.rootPath)) {
+				displayPath = displayPath.substring(this.rootPath.length);
+			}
+		}
+
+		// Clean up leading slashes so we don't get "//folder"
+		displayPath = displayPath.startsWith("/")
+			? displayPath.substring(1)
+			: displayPath;
+
+		// If the path is empty (meaning it IS the root), show a slash
+		el.setText(displayPath || "/");
 	}
 
 	selectSuggestion(file: TFolder): void {

@@ -1,8 +1,12 @@
 import { App, TFile, parseYaml } from "obsidian";
-import { QuestionTemplate } from "../types/QuestionAttributeTemplate";
+import { QuestionAttributeTemplate } from "../types/QuestionAttributeTemplate";
 
-export class QuestionTemplateService {
-	private cache = new Map<string, QuestionTemplate>();
+/**
+ * A service to load/unload question attribute templates into a cache
+ * - These templates are used
+ */
+export class QuestionAttributeTemplateService {
+	private cache = new Map<string, QuestionAttributeTemplate>();
 
 	constructor(
 		private app: App,
@@ -15,7 +19,7 @@ export class QuestionTemplateService {
 		if (!this.folder) return;
 
 		const files = this.app.vault
-			.getMarkdownFiles()
+			.getFiles()
 			.filter((f) => f.path.startsWith(this.folder));
 
 		for (const file of files) {
@@ -26,7 +30,8 @@ export class QuestionTemplateService {
 	async upsert(file: TFile) {
 		if (!this.isTemplateFile(file)) return;
 
-		const template = await this.parseTemplate(file);
+		const template: QuestionAttributeTemplate | null =
+			await this.parseTemplate(file);
 		if (template) {
 			this.cache.set(template.id, template);
 		}
@@ -43,17 +48,22 @@ export class QuestionTemplateService {
 
 	async reload() {
 		await this.load();
+		// console.log(
+		// 	`Loaded templates: ${Array.from(this.cache.keys()).join(",")}`,
+		// );
 	}
 
-	getAll(): QuestionTemplate[] {
+	getAll(): QuestionAttributeTemplate[] {
 		return [...this.cache.values()];
 	}
 
-	get(id: string): QuestionTemplate | undefined {
+	get(id: string): QuestionAttributeTemplate | undefined {
 		return this.cache.get(id);
 	}
 
-	private async parseTemplate(file: TFile): Promise<QuestionTemplate | null> {
+	private async parseTemplate(
+		file: TFile,
+	): Promise<QuestionAttributeTemplate | null> {
 		const content = await this.app.vault.read(file);
 		const match = content.match(/^---\n([\s\S]*?)\n---/);
 

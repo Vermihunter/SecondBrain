@@ -1,30 +1,33 @@
-import {
-	App,
-	Editor,
-	MarkdownView,
-	Modal,
-	Notice,
-	Plugin,
-	TFile,
-} from "obsidian";
+/* eslint-disable obsidianmd/ui/sentence-case */
+import { Plugin, TFile } from "obsidian";
 import { CreateQuestionModal } from "./ui/modals/CreateQuestionModal";
 import {
 	DEFAULT_SETTINGS,
 	SecondBrainPluginSettings,
 	SecondBrainSettingTab,
 } from "./settings";
-import { QuestionTemplateService } from "core/services/QuestionTemplateService";
+import { QuestionAttributeTemplateService } from "core/services/QuestionAttributeTemplateService";
+import { GenerateQuestionsModal } from "ui/modals/GenerateQuestionsModal";
+import GenerateQuestionsState from "core/types/GenerateQuestionsState";
+import { generateQuestions } from "core/services/QuestionGeneratingService";
+import {
+	createFileFromPath,
+	frontmatterToString,
+	getQuestionFilePathForNote,
+} from "core/services/FileService";
+import { render_template } from "core/services/TemplatingService";
+import DefaultQuestionTemplate from "core/default_templates/DefaultQuestionTemplate";
 
 // Remember to rename these classes and interfaces!
 
 export default class SecondBrainPlugin extends Plugin {
 	settings: SecondBrainPluginSettings;
-	templateService: QuestionTemplateService;
+	templateService: QuestionAttributeTemplateService;
 
 	async onload() {
 		await this.loadSettings();
 
-		this.templateService = new QuestionTemplateService(
+		this.templateService = new QuestionAttributeTemplateService(
 			this.app,
 			this.settings.questionTemplateFolder,
 		);
@@ -68,21 +71,61 @@ export default class SecondBrainPlugin extends Plugin {
 			}),
 		);
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon("dice", "Sample", (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice("This is a notice!");
-		});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText("Status bar text");
-
 		this.addCommand({
-			id: "display-modal",
-			name: "Display modal",
+			id: "create-question",
+			name: "Create Question",
 			callback: () => {
 				new CreateQuestionModal(this.app, this).open();
+			},
+		});
+
+		this.addCommand({
+			id: "generate-random-questions",
+			name: "Generate Random Questions",
+			callback: () => {
+				new GenerateQuestionsModal(
+					this.app,
+					async (state: GenerateQuestionsState) => {
+						const generatedQuestions = await generateQuestions(
+							this.app,
+							this,
+							state,
+						);
+
+						console.log("generatedQuestions");
+						console.log(generatedQuestions);
+
+						const serializedQuestions = generatedQuestions
+							.map((q) => {
+								return render_template(
+									DefaultQuestionTemplate,
+									q,
+								);
+							})
+							.join("\n");
+
+						const header = frontmatterToString({
+							tags: generatedQuestions
+								.map((q) => q.tags)
+								.flat()
+								.unique(),
+							properties: {},
+						});
+
+						const filePath = `${this.settings.generatedQuestionsDir}/${Date.now()}.md`;
+						const fileContent = [header, serializedQuestions].join(
+							"\n\n",
+						);
+
+						await createFileFromPath(
+							this.app,
+							filePath,
+							fileContent,
+						);
+
+						return generatedQuestions;
+					},
+				).open();
 			},
 		});
 

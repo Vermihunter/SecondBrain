@@ -1,11 +1,22 @@
-import { App, Modal, Notice, Setting } from "obsidian";
-import { QuestionTemplate } from "../../core/types/QuestionAttributeTemplate";
+import { App, Modal, Notice, Setting, TFile, ToggleComponent } from "obsidian";
+import { QuestionAttributeTemplate } from "../../core/types/QuestionAttributeTemplate";
 import SecondBrainPlugin from "../../main";
+import { buildCssClass } from "core/utils/Utils";
+import Question from "core/types/Question";
+import { createQuestion } from "core/services/QuestionGeneratingService";
+import QuestionGeneratingType from "core/types/QuestionGeneratingInformation";
+
+interface ModalInputData {
+	//type: "string" | "number" | "boolean";
+	name: string;
+	value: string | number | boolean;
+}
 
 export class CreateQuestionModal extends Modal {
-	private selectedTemplate?: QuestionTemplate;
+	private selectedTemplate?: QuestionAttributeTemplate;
 	private attrsContainer!: HTMLElement;
 	private footerContainer!: HTMLElement;
+	private attrInputs = new Map<string, HTMLElement | ToggleComponent>();
 
 	private questionText = "";
 	private answerText = "";
@@ -21,9 +32,13 @@ export class CreateQuestionModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 
-		contentEl.createEl("h2", { text: "Create Question" });
+		contentEl.createEl("h2", {
+			text: "Create Question",
+			cls: "centered-modal-title",
+		});
 
-		const templates = this.renderTemplatePicker(contentEl);
+		const templates: QuestionAttributeTemplate[] =
+			this.renderTemplatePicker(contentEl);
 
 		this.renderQAFields(contentEl);
 		this.attrsContainer = contentEl.createDiv({
@@ -57,22 +72,97 @@ export class CreateQuestionModal extends Modal {
 		submitBtn.onclick = () => this.handleSubmit();
 	}
 
-	private handleSubmit() {
+	private getInputData() {
+		const result: ModalInputData[] = [];
+
+		for (const attr of this.selectedTemplate.attributes) {
+			const el = this.attrInputs.get(attr.key);
+			if (!el) continue;
+
+			switch (attr.type) {
+				case "checkbox":
+					result.push({
+						//type: "boolean",
+						name: attr.key,
+						value: (el as ToggleComponent).getValue(),
+					});
+					break;
+
+				case "number":
+					result.push({
+						//type: "number",
+						name: attr.key,
+						value: Number((el as HTMLInputElement).value || 0),
+					});
+					break;
+
+				case "text":
+				case "select":
+					result.push({
+						//type: "string",
+						name: attr.key,
+						value: (el as HTMLInputElement).value,
+					});
+					break;
+			}
+		}
+
+		return result;
+	}
+
+	private inputToQuestionGeneratingType = (
+		i: ModalInputData,
+	): QuestionGeneratingType => {
+		const templateAttr = this.selectedTemplate?.attributes.find(
+			(a) => a.key === i.name,
+		);
+
+		let value = i.value;
+		let cssClass: string = "";
+		if (typeof i.value === "boolean") {
+			value = i.name;
+			cssClass = i.value === true ? "bool-true" : "bool-false";
+		} else {
+			cssClass = buildCssClass(
+				i.name,
+				String(value),
+				templateAttr?.cssMode ?? "key-value",
+			);
+		}
+
+		return {
+			key: i.name,
+			val: i.value,
+			label: String(value),
+			cssClass,
+		};
+	};
+
+	// This should not happen here → refactor to a service
+	private async handleSubmit() {
+		const file = this.app.workspace.getActiveFile();
+		if (!file) {
+			new Notice("Please open a file to create questions for!");
+			return;
+		}
+
 		if (!this.questionText.trim()) {
 			new Notice("Question cannot be empty");
 			return;
 		}
 
-		// Later:
-		// - build markdown
-		// - create file
-		// - insert into vault
+		// Get input data from the Modal
+		const inputData = this.getInputData();
+		const attributes = inputData.map(this.inputToQuestionGeneratingType);
 
-		console.log({
+		const question: Question = {
 			question: this.questionText,
 			answer: this.answerText,
-			template: this.selectedTemplate,
-		});
+			attributes,
+			tags: [], // appended in next step in createQuestion
+		};
+
+		await createQuestion(this.app, this.plugin, question, file);
 
 		this.close();
 	}
@@ -119,7 +209,9 @@ export class CreateQuestionModal extends Modal {
 		});
 	}
 
-	private renderTemplatePicker(container: HTMLElement): QuestionTemplate[] {
+	private renderTemplatePicker(
+		container: HTMLElement,
+	): QuestionAttributeTemplate[] {
 		const templates = this.plugin.templateService.getAll();
 
 		new Setting(container).setName("Template").addDropdown((dropdown) => {
@@ -129,17 +221,17 @@ export class CreateQuestionModal extends Modal {
 
 			dropdown.onChange((value) => {
 				this.selectedTemplate = this.plugin.templateService.get(value);
-
-				this.renderAttributes(container);
+				this.renderAttributes();
 			});
 		});
 
 		return templates;
 	}
 
-	private renderAttributes(container: HTMLElement) {
+	private renderAttributes() {
 		//container.querySelector(".template-attrs")?.remove();
 		this.attrsContainer.empty();
+		this.attrInputs.clear();
 
 		if (!this.selectedTemplate) return;
 
@@ -153,20 +245,28 @@ export class CreateQuestionModal extends Modal {
 
 			switch (attr.type) {
 				case "text":
-					setting.addText((t) => {});
+					setting.addText((t) => {
+						this.attrInputs.set(attr.key, t.inputEl);
+					});
 					break;
 
 				case "number":
-					setting.addText((t) => (t.inputEl.type = "number"));
+					setting.addText((t) => {
+						t.inputEl.type = "number";
+						this.attrInputs.set(attr.key, t.inputEl);
+					});
 					break;
 
 				case "checkbox":
-					setting.addToggle((t) => {});
+					setting.addToggle((t) => {
+						this.attrInputs.set(attr.key, t);
+					});
 					break;
 
 				case "select":
 					setting.addDropdown((d) => {
 						attr.options?.forEach((opt) => d.addOption(opt, opt));
+						this.attrInputs.set(attr.key, d.selectEl);
 					});
 					break;
 			}

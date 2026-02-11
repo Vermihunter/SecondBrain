@@ -1,12 +1,19 @@
-export type AttributeType = "text" | "select" | "checkbox" | "number";
+import { AttributeType } from "./AttributeType";
 
+/**
+ * Represents one attribute of the template
+ */
 export interface TemplateAttribute {
 	key: string;
 	type: AttributeType;
-	options?: string[];
+	options?: string[]; // The options for 'select'
+	cssMode: "key" | "key-value";
 }
 
-export interface QuestionTemplate {
+/**
+ * Represents a Question template saved in an external file
+ */
+export interface QuestionAttributeTemplate {
 	id: string; // file path
 	name: string;
 	attributes: TemplateAttribute[];
