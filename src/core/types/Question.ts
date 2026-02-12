@@ -1,5 +1,4 @@
 import QuestionGeneratingType from "./QuestionGeneratingInformation";
-import QuestionProperty from "./QuestionProperty";
 
 /**
  * Represents one logical Question object - this should be the base

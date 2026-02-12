@@ -17,6 +17,8 @@ import {
 } from "core/services/FileService";
 import { render_template } from "core/services/TemplatingService";
 import DefaultQuestionTemplate from "core/default_templates/DefaultQuestionTemplate";
+import Question from "core/types/Question";
+import { generatePDFForQuestions } from "core/services/PDFGeneratingService";
 
 // Remember to rename these classes and interfaces!
 
@@ -85,17 +87,22 @@ export default class SecondBrainPlugin extends Plugin {
 			callback: () => {
 				new GenerateQuestionsModal(
 					this.app,
-					async (state: GenerateQuestionsState) => {
-						const generatedQuestions = await generateQuestions(
+					this,
+					async (
+						state: GenerateQuestionsState,
+						questions: Question[],
+					) => {
+						questions = await generateQuestions(
 							this.app,
 							this,
 							state,
+							questions,
 						);
 
 						console.log("generatedQuestions");
-						console.log(generatedQuestions);
+						console.log(questions);
 
-						const serializedQuestions = generatedQuestions
+						const serializedQuestions = questions
 							.map((q) => {
 								return render_template(
 									DefaultQuestionTemplate,
@@ -105,7 +112,7 @@ export default class SecondBrainPlugin extends Plugin {
 							.join("\n");
 
 						const header = frontmatterToString({
-							tags: generatedQuestions
+							tags: questions
 								.map((q) => q.tags)
 								.flat()
 								.unique(),
@@ -123,7 +130,10 @@ export default class SecondBrainPlugin extends Plugin {
 							fileContent,
 						);
 
-						return generatedQuestions;
+						const pdfPath = `${this.settings.generatedQuestionsDir}/${Date.now()}.pdf`;
+						await generatePDFForQuestions(questions, pdfPath);
+
+						return questions;
 					},
 				).open();
 			},

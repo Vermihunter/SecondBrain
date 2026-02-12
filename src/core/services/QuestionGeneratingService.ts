@@ -17,12 +17,13 @@ export async function generateQuestions(
 	app: App,
 	plugin: SecondBrainPlugin,
 	state: GenerateQuestionsState,
+	allQuestions: Question[],
 ): Promise<Question[]> {
-	const allQuestions = await getAllQuestions(
-		app,
-		plugin,
-		plugin.settings.questionsBaseDir,
-	);
+	// const allQuestions = await getAllQuestions(
+	// 	app,
+	// 	plugin,
+	// 	plugin.settings.questionsBaseDir,
+	// );
 
 	// console.log("state");
 	// console.log(state);
@@ -50,7 +51,9 @@ function matchesProperties(
 	if (entries.length === 0) return true;
 
 	return entries.every(([key, value]) =>
-		q.attributes.some((attr) => attr.key === key && attr.val === value),
+		q.attributes.some(
+			(attr) => attr.key === key && String(attr.val) === value,
+		),
 	);
 }
 

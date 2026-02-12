@@ -25,7 +25,9 @@
 	},
 	"dependencies": {
 		"@popperjs/core": "^2.11.8",
+		"fs-extra": "^11.3.3",
 		"handlebars": "^4.7.8",
+		"html2pdf.js": "^0.14.0",
 		"obsidian": "latest",
 		"seedrandom": "^3.0.5"
 	}

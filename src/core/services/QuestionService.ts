@@ -5,6 +5,7 @@ import SecondBrainPlugin from "main";
 import { App, TFile } from "obsidian";
 import { getFileTags } from "./FileService";
 import QuestionGeneratingType from "core/types/QuestionGeneratingInformation";
+import { PropertySchemaMap } from "core/types/PropertySchema";
 
 export async function getAllQuestions(
 	app: App,
@@ -18,14 +19,16 @@ export async function getAllQuestions(
 
 	const questions: Question[] = [];
 	for (const file of allQuestionFolders) {
+		// Skip generated questions - they have the same format so they would be duplicated many times
 		if (file.path.startsWith(plugin.settings.generatedQuestionsDir)) {
-			console.log(`Skipping file ${file.path}`);
 			continue;
 		}
-		const content = await app.vault.read(file);
 
+		// Parse the blocks (= questions) from a single file since there may be multiple in a single file
+		const content = await app.vault.read(file);
 		const blocks = parseQuestions(content);
 
+		// Construct Question objects from
 		for (const block of blocks) {
 			questions.push({
 				question: block.question,
@@ -35,10 +38,6 @@ export async function getAllQuestions(
 			});
 		}
 	}
-
-	// console.log(`questions`);
-	// console.log(questions);
-
 	return questions;
 }
 
@@ -154,3 +153,48 @@ function parseQuestions_old(src: string) {
 
 	return results;
 }
+
+export function questionsToPropertySchema(
+	questions: Question[],
+): PropertySchemaMap {
+	const map: Record<string, Set<string | number | boolean>> = {};
+
+	// 1️⃣ Collect all values per key
+	for (const q of questions) {
+		for (const attr of q.attributes) {
+			if (!map[attr.key]) {
+				map[attr.key] = new Set();
+			}
+			map[attr.key].add(attr.val);
+		}
+	}
+
+	const schema: PropertySchemaMap = {};
+
+	// 2️⃣ Infer type per key
+	for (const [key, values] of Object.entries(map)) {
+		const uniqueValues = Array.from(values);
+
+		// If all values are boolean → boolean type
+		if (uniqueValues.every((v) => typeof v === "boolean")) {
+			schema[key] = { type: "boolean" };
+		} else {
+			// Otherwise → select
+			schema[key] = {
+				type: "select",
+				options: uniqueValues.filter(
+					(v): v is string | number =>
+						typeof v === "string" || typeof v === "number",
+				),
+			};
+		}
+	}
+
+	return schema;
+}
+
+// const propertySchema: PropertySchemaMap = {
+// 	difficulty: { type: "select", options: ["easy", "medium", "hard"] },
+// 	favorite: { type: "boolean" },
+// 	points: { type: "select", options: [1, 2, 3, 5] },
+// };
